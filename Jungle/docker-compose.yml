@@ -1,0 +1,96 @@
+x-api-common: &api-common
+  build: .
+  command: ["bun", "run", "start:prod"]
+  environment: &api-environment
+    NODE_ENV: production
+    PORT: 3000
+    DATABASE_HOST: postgres
+    DATABASE_PORT: 5432
+    DATABASE_NAME: wagering
+    DATABASE_USER: wagering
+    DATABASE_PASSWORD: wagering
+    AWS_REGION: sa-east-1
+    AWS_ACCESS_KEY_ID: test
+    AWS_SECRET_ACCESS_KEY: test
+    AWS_ENDPOINT_URL: http://localstack:4566
+    SQS_TRANSACTIONS_QUEUE_URL: http://localstack:4566/queue/sa-east-1/000000000000/wager-transactions.fifo
+    SQS_DLQ_QUEUE_URL: http://localstack:4566/queue/sa-east-1/000000000000/wager-transactions-dlq.fifo
+    SQS_EVENTS_QUEUE_URL: http://localstack:4566/queue/sa-east-1/000000000000/wager-events.fifo
+    ENABLE_TEST_FAULT_INJECTION: ${ENABLE_TEST_FAULT_INJECTION:-0}
+    SQS_VISIBILITY_TIMEOUT_SECONDS: ${SQS_VISIBILITY_TIMEOUT_SECONDS:-30}
+  depends_on: &api-dependencies
+    postgres:
+      condition: service_healthy
+    localstack:
+      condition: service_healthy
+    migrate:
+      condition: service_completed_successfully
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wagering
+      POSTGRES_USER: wagering
+      POSTGRES_PASSWORD: wagering
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wagering -d wagering"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  localstack:
+    image: localstack/localstack:4
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: sa-east-1
+      SQS_ENDPOINT_STRATEGY: path
+      PERSISTENCE: 1
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./localstack/init/ready.d:/etc/localstack/init/ready.d:ro
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4566/_localstack/health | grep -q 'sqs'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    build: .
+    command: ["bun", "run", "migrate"]
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: wagering
+      DATABASE_USER: wagering
+      DATABASE_PASSWORD: wagering
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *api-common
+    ports:
+      - "3000:3000"
+
+  api-2:
+    <<: *api-common
+    ports:
+      - "3001:3000"
+
+  api-3:
+    <<: *api-common
+    ports:
+      - "3002:3000"
+
+volumes:
+  postgres_data:
+  localstack_data:
