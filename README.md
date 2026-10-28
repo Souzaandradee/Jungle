@@ -79,7 +79,7 @@ O repositório é público. As alterações da branch `fix/readme-compliance-led
 **Clone novo:**
 
 ~~~bash
-git clone --branch main --single-branch https://github.com/joao-henrike/challenge.git
+git clone --branch main --single-branch https://github.com/souzaandradee/challenge.git
 cd challenge
 git status
 git log -1 --oneline
